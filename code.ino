@@ -1,0 +1,1076 @@
+
+/***********DANANG UNIVERSITY OF TECHNOLOGY AND SCIENCIES*****************/
+/*********ELECTRONIC AND TELECOMMUNICATION ENGINEERING FACULTY***********/
+/******************DESIGNED BY : TRAN SANG -14DT1***********************/
+/************************* (+84)0964 500 940 *************************/
+#include <Wire.h> /*i2c interface*/
+#include <SimpleTimer.h>  
+SimpleTimer timer;
+
+#include <idDHT11.h> /* DHT11 SENSOR*/
+int idDHT11pin = 2;
+int idDHT11intNumber = 0;
+void dht11_wrapper();
+idDHT11 DHT11(idDHT11pin, idDHT11intNumber, dht11_wrapper);
+
+#include <AnalogMultiButton.h> /*Debounce button*/
+const int BUTTONS_PIN = A0;
+const int BUTTONS_TOTAL = 5;
+const int BUTTONS_VALUES[BUTTONS_TOTAL] = {31, 174, 356, 516, 751};
+const int RIGHT = 0;
+const int UP = 1;
+const int DOWN = 2;
+const int LEFT = 3;
+const int SELECT = 4;
+AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
+#define _menu btn
+#define NO_SELECT 5
+#define ON true
+#define OFF false
+
+enum {Main_Screen, SANG_BKDN, Device_1, Device_2, Device_Status, Change_Hour, Change_Minute, Change_Second, Change_Day, Change_Date, Change_Month, Change_Year, Fix_Time};
+
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
+
+byte t, h;//temp and huminity
+int _second, _minute, _hour, _day, _date, _month, _year;// read time
+byte degree[8] = {
+  B11110,
+  B10010,
+  B10010,
+  B11110,
+  B00000,
+  B00000,
+  B00000,
+  B00000
+};  // Create degree Celcius character
+
+// button var
+int menu_count = 0;
+int btn_check;// btn_check: check button
+int btn;
+static int change = 0;
+int gio, phut, giay, thu, ngay, thang, nam; //set timer
+int hour1_Set, Min1_Set; //set timer led 1
+int hour2_Set, Min2_Set; //set timer led 2
+bool led1_Status = OFF, led2_Status = OFF; // in order to set timer
+#define virtual_minute 100
+#define virtual_hour 30
+//devices 
+#define led1 12// device 1 
+#define led2 13// device 2
+#define MASS A2
+#define RAIN A1
+int MASS_VALUE =0;
+int RAIN_VALUE =0;
+int Mass_Percent =0;
+#define alert 11 // warning it's rain
+void setup() {
+ // Serial.begin(9600);
+  lcd.begin(16, 2);  // initialize the lcd for 16 chars 2 lines, turn on backlight
+  lcd.backlight();
+   Wire.begin();
+  lcd.createChar(1, degree); // custom character
+  timer.setInterval(500L, _update);// update data sensor after each 0,5s
+  
+  pinMode(led1, OUTPUT);
+  digitalWrite(led1, 1); // 1 off-io pin -connect to relay
+  pinMode(led2, OUTPUT);
+  digitalWrite(led2, 1);
+  pinMode(alert,OUTPUT);
+  digitalWrite(alert, 0); // gpio arduino
+  pinMode(MASS,INPUT);
+  pinMode(RAIN,INPUT);
+}
+void loop()
+{
+  timer.run();
+  check_button();
+  timer1();
+  timer2();
+  argriculture(); 
+}
+
+int btn_read()
+{
+  if (buttons.onRelease(UP))
+    return UP;
+  else if (buttons.onRelease(DOWN))
+    return DOWN;
+  else if (buttons.onRelease(LEFT))
+    return LEFT;
+  else if (buttons.onRelease(RIGHT))
+    return RIGHT;
+  else if (buttons.onRelease(SELECT))
+    return SELECT;
+  else return NO_SELECT;
+}
+int menu()
+{
+  if (buttons.onRelease(UP))
+  {
+    lcd.clear();
+    menu_count++;
+    if (menu_count > 12) menu_count = 12;
+  }
+  else if (buttons.onRelease(DOWN))
+  {
+    lcd.clear();
+    menu_count--;
+    if (menu_count <= 0) menu_count = 0;
+  }
+  else if (buttons.onRelease(LEFT))
+  {
+    lcd.clear();
+    menu_count = 0;
+  }
+  return menu_count;
+}
+int dec2bcd(byte num)
+{
+  return ((num / 10) * 16 + (num % 10));
+}
+int bcd2dec(byte num)
+{
+  return ((num / 16) * 10 + (num % 16));
+}
+//-----------------
+void settime(byte _hour_, byte _minute_, byte _second_, byte _day_, byte _date_, byte _month_, byte _year_)
+{
+  Wire.beginTransmission(0x68);// 0x68 :  ds3231 Slave'address
+  Wire.write(0);// set pointer at second register
+  Wire.write(dec2bcd(_second_));
+  Wire.write(dec2bcd(_minute_));
+  Wire.write(dec2bcd(_hour_));
+  Wire.write(dec2bcd(_day_));
+  Wire.write(dec2bcd(_date_));
+  Wire.write(dec2bcd(_month_));
+  Wire.write(dec2bcd(_year_));
+  Wire.endTransmission();
+}
+//----------------------
+void readTime()
+{
+  Wire.beginTransmission(0x68);
+  Wire.write(0);// set pointer at second register
+  Wire.endTransmission();
+  Wire.requestFrom(0x68, 7);
+  _second = bcd2dec(Wire.read() & 0x7f); //remove bits not used
+  _minute = bcd2dec(Wire.read() & 0x7f);
+  _hour = bcd2dec(Wire.read() & 0x3f); // 24h mode
+  _day = bcd2dec(Wire.read() & 0x07);
+  _date = bcd2dec(Wire.read() & 0x3f);
+  _month = bcd2dec(Wire.read() & 0x1f);
+  _year = bcd2dec(Wire.read());
+  _year = _year + 2000;
+}
+void display_lcd()
+{
+  if ((_minute == 0) && (_second == 0)) //after 1 hour - clear cld
+  {
+    lcd.clear();
+  }
+
+  lcd.setCursor(0, 0);
+  switch (_day)
+  {
+    case 1: lcd.print("Sun"); break;
+    case 2: lcd.print("Mon"); break;
+    case 3: lcd.print("Tue"); break;
+    case 4: lcd.print("Wed"); break;
+    case 5: lcd.print("Thur"); break;
+    case 6: lcd.print("Fri"); break;
+    case 7: lcd.print("Sat"); break;
+  }
+
+  lcd.setCursor(6, 0);
+  lcd.print(_date);
+  lcd.print("/");
+  lcd.print(_month);
+  lcd.print("/");
+  lcd.print(_year);
+  lcd.setCursor(0, 1);
+  lcd.print(_hour);
+  lcd.print(":");
+  lcd.print(_minute);
+
+  //-----dht
+  lcd.setCursor(9, 1);
+  lcd.print(t);
+  lcd.setCursor(11, 1);
+  lcd.write(1);
+  lcd.setCursor(13, 1);
+  lcd.print(h);
+  lcd.print("%");
+
+}
+void led_status1()
+{
+
+  int x = digitalRead(led1);
+  if (x == 0)
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("LED1 : ON");
+  }
+  else if (x == 1)
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("LED1 : OFF");
+  }
+}
+void led_status2()
+{
+
+  int y = digitalRead(led2);
+  if (y == 0)
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("LED2 : ON");
+  }
+  else if (y == 1)
+  {
+    lcd.setCursor(0, 0);
+    lcd.print("LED2 : OFF");
+  }
+}
+void change_day()
+{
+  switch (change)
+  {
+    case 1:
+      lcd.setCursor(0, 0);
+      lcd.print("Sunday"); break;
+    case 2:
+      lcd.setCursor(0, 0);
+      lcd.print("Monday"); break;
+    case 3:
+      lcd.setCursor(0, 0);
+      lcd.print("Tuesday"); break;
+    case 4:
+      lcd.setCursor(0, 0);
+      lcd.print("Wednesday"); break;
+    case 5:
+      lcd.setCursor(0, 0);
+      lcd.print("Thursday"); break;
+    case 6:
+      lcd.setCursor(0, 0);
+      lcd.print("Friday"); break;
+    case 7:
+      lcd.setCursor(0, 0);
+      lcd.print("Saturday"); break;
+  }
+}
+void change_month()
+{
+  switch (change)
+  {
+    case 1:
+      lcd.setCursor(0, 0);
+      lcd.print("January");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 2:
+      lcd.setCursor(0, 0);
+      lcd.print("February");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 3:
+      lcd.setCursor(0, 0);
+      lcd.print("March");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 4:
+      lcd.setCursor(0, 0);
+      lcd.print("April");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 5:
+      lcd.setCursor(0, 0);
+      lcd.print("May");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 6:
+      lcd.setCursor(0, 0);
+      lcd.print("June");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 7:
+      lcd.setCursor(0, 0);
+      lcd.print("July");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 8:
+      // lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("August");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 9:
+      lcd.setCursor(0, 0);
+      lcd.print("September");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 10:
+      lcd.setCursor(0, 0);
+      lcd.print("October");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 11:
+      lcd.setCursor(0, 0);
+      lcd.print("November");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+    case 12:
+      lcd.setCursor(0, 0);
+      lcd.print("December");
+      lcd.setCursor(13, 1);
+      lcd.print(change);
+      break;
+  }
+}
+void timer2()
+{
+  if ((hour2_Set == _hour) && (Min2_Set == _minute))
+  {
+    digitalWrite(led2, !led2_Status);
+    hour2_Set = virtual_hour; // avoid repeating events
+    Min2_Set = virtual_minute;
+  }
+}
+void timer1()
+{
+  if ((hour1_Set == _hour) && (Min1_Set == _minute))
+  {
+    digitalWrite(led1, !led1_Status);
+    hour1_Set = virtual_hour; 
+    Min1_Set = virtual_minute;
+  }
+}
+
+void _update()
+{
+  DHT11.acquire();
+  while (DHT11.acquiring());
+
+  h = (int)DHT11.getHumidity();
+  t = (int)DHT11.getCelsius();
+  RAIN_VALUE =analogRead(RAIN);
+  MASS_VALUE =analogRead(MASS);
+  Mass_Percent= map(MASS_VALUE,0,4095,0,100);
+  /* update timer */
+  readTime();
+}
+void check_button()
+{
+  static byte isPress = false;
+  static bool isFirst = true;
+  static bool smart = false;
+  static bool isMenuChild = false;
+  static byte healer = 0;
+  buttons.update();
+  btn_check = btn_read();
+  if (isMenuChild == false) {
+    _menu = menu(); //_menu <=> btn
+  }
+  switch (_menu)
+  {
+    case Main_Screen:
+      display_lcd();
+      break;
+
+    case SANG_BKDN:
+      lcd.setCursor(0,0);
+      lcd.print("TRAN SANG - BKDN");
+      lcd.setCursor(2, 1);
+      lcd.print("0964.500.940");
+      break;
+
+    case Device_1:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Device 1");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+        }
+        switch (healer) {
+          case UP:
+            digitalWrite(led1, 0);
+            lcd.setCursor(0, 0);
+            lcd.print("LED1 :  ON");
+            break;
+          case DOWN:
+            digitalWrite(led1, 1);      
+            lcd.setCursor(0, 0);
+            lcd.print("LED1 : OFF");
+            break;
+          case LEFT:
+            hour1_Set = gio;
+            Min1_Set = phut;
+            led1_Status = digitalRead(led1); //check device status
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            break;
+          case SELECT:
+            led_status1();
+            isMenuChild = true;
+            break;
+        }//switch child case 2
+      }//else case 2
+      break;
+    /*---------------------------------*/
+    case Device_2:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Device 2");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+        }
+        switch (healer) {
+          case UP:
+            digitalWrite(led2, 0);
+            lcd.setCursor(0, 0);
+            lcd.print("LED2 :  ON");
+            break;
+          case DOWN:
+            digitalWrite(led2, 1);
+            lcd.setCursor(0, 0);
+            lcd.print("LED2 : OFF");
+            break;
+          case LEFT:
+            hour2_Set = gio;
+            Min2_Set = phut;
+            led2_Status = digitalRead(led2);
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            break;
+          case SELECT:
+            led_status2();
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Device_Status:
+      if (smart == false)
+      {
+        if (btn_check == SELECT)
+        {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Device Status");
+      }
+      else {
+        if (btn_check != NO_SELECT)
+        {
+          healer = btn_check;
+        }
+        switch (healer)
+        {
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            break;
+          case SELECT:
+            int x = digitalRead(led1);
+            int y = digitalRead(led2);
+            if (x == 1) {
+              lcd.setCursor(0, 0);
+              lcd.print("LED1  :  OFF  ");
+            }
+            else  {
+              lcd.setCursor(0, 0);
+              lcd.print("LED1  :   ON  ");
+            }
+
+            if (y == 1) {
+              lcd.setCursor(0, 1);
+              lcd.print("LED2  :  OFF");
+            }
+            else  {
+              lcd.setCursor(0, 1);
+              lcd.print("LED2  :   ON");
+            }
+            isMenuChild = true;
+            break;
+        }
+      } break;
+    /*-----------gap---------------*/
+    case Change_Hour:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Hour");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 23) {
+              lcd.clear();
+              change = 0;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Hour :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 0) {
+              lcd.clear();
+              change = 23;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Hour :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case LEFT:
+            gio = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            isFirst = true;
+            smart = false;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _hour;
+            lcd.setCursor(0, 0);
+            lcd.print("Hour :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Minute:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Minute");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 59) {
+              lcd.clear();
+              change = 0;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Minute :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 0) {
+              lcd.clear();
+              change = 59;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Minute :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            break;
+          case LEFT:
+            phut = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            isFirst = true;
+            smart = false;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _minute;
+            lcd.setCursor(0, 0);
+            lcd.print("Minute :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Second:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Second");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 59) {
+              lcd.clear();
+              change = 0;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Second :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 0) {
+              lcd.clear();
+              change = 59;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Second :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            break;
+          case LEFT:
+            giay = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = 0;
+            lcd.setCursor(0, 0);
+            lcd.print("Second :");
+            lcd.setCursor(8, 0);
+            lcd.print(change);
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Day:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Day");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 7) {
+              lcd.clear();
+              change = 1;
+            }
+            change_day();
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              isPress = false;
+            }
+            if (change < 1) {
+              lcd.clear();
+              change = 7;
+            }
+            change_day();
+            break;
+          case LEFT:
+            thu = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _day;
+            change_day();
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Date:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Date");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 31) {
+              lcd.clear();
+              change = 0;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Date :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 0) {
+              lcd.clear();
+              change = 31;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Date :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case LEFT:
+            ngay = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _date;
+            lcd.setCursor(0, 0);
+            lcd.print("Date :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Month:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Month");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change > 12) {
+              lcd.clear();
+              change = 1;
+            }
+            change_month();
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 1) {
+              lcd.clear();
+              change = 12;
+            }
+            change_month();
+            break;
+          case LEFT:
+            thang = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _month;
+            change_month();
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Change_Year:
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Change Year");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+            if (isPress) {
+              change++;
+              lcd.clear();
+              isPress = false;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Year :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case DOWN:
+            if (isPress) {
+              change--;
+              lcd.clear();
+              isPress = false;
+            }
+            if (change < 0) {
+              lcd.clear();
+              change = _year;
+            }
+            lcd.setCursor(0, 0);
+            lcd.print("Year :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            break;
+          case LEFT:
+            nam = change;
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            change = _year;
+            lcd.setCursor(0, 0);
+            lcd.print("Year :");
+            lcd.setCursor(7, 0);
+            lcd.print(change);
+            isMenuChild = true;
+            break;
+        }//switch child case 3
+      }//else case 3
+      break;
+    /*------------gap---------------*/
+    case Fix_Time:
+      if (smart == false) {
+        if (btn_check == SELECT)
+        {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Fix Time");
+      }
+      else {
+        if (btn_check != NO_SELECT)
+        {
+          healer = btn_check;
+        }
+        switch (healer)
+        {
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            break;
+          case SELECT:
+            //set time
+            settime(gio, phut, giay, thu, ngay, thang, nam - 48);
+            lcd.setCursor(0, 1);
+            lcd.print("Completed");
+            isMenuChild = true;
+            break;
+        }
+      } break;
+      /*-----------------gap_end----------------*/
+  }//switch _menu
+}//void
+void dht11_wrapper() {
+  DHT11.isrCallback();
+}
+/*void AM()
+{    lcd.setCursor(5, 1);
+            lcd.print("AM");
+  }*/
+void argriculture()
+{
+  /*Serial.print("Rain : ");
+  Serial.print(RAIN_VALUE);
+  Serial.println();
+    Serial.print("Mass : ");
+  Serial.print(MASS_VALUE);
+   Serial.println();
+    Serial.print("Mass Percent : ");
+  Serial.print(Mass_Percent);
+   Serial.println();*/
+   if((MASS_VALUE <450)&&(RAIN_VALUE>=900)) // Low huminity & It's not rain
+   digitalWrite(led1,0); // On motor
+  /* else if(MASS_VALUE > 800) digitalWrite(led1,1); // Off motor*/
+   if(RAIN_VALUE <250)  {digitalWrite(led1,1); // Off motor
+                         digitalWrite(alert,1); }// it's raining
+   else digitalWrite(alert,0); // turn off warning ,it's not rain                      
+  }
