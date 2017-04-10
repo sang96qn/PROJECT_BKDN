@@ -1,8 +1,4 @@
-
 /***********DANANG UNIVERSITY OF TECHNOLOGY AND SCIENCIES*****************/
-/*********ELECTRONIC AND TELECOMMUNICATION ENGINEERING FACULTY***********/
-/******************DESIGNED BY : TRAN SANG -14DT1***********************/
-/************************* (+84)0964 500 940 *************************/
 #include <Wire.h> /*i2c interface*/
 #include <SimpleTimer.h>  
 SimpleTimer timer;
@@ -28,7 +24,7 @@ AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
 #define ON true
 #define OFF false
 
-enum {Main_Screen, SANG_BKDN, Device_1, Device_2, Device_Status, Change_Hour, Change_Minute, Change_Second, Change_Day, Change_Date, Change_Month, Change_Year, Fix_Time};
+enum {Main_Screen, MENU2, Device_1, Device_2, Device_Status, Change_Hour, Change_Minute, Change_Second, Change_Day, Change_Date, Change_Month, Change_Year, Fix_Time};
 
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
@@ -54,11 +50,11 @@ static int change = 0;
 int gio, phut, giay, thu, ngay, thang, nam; //set timer
 int hour1_Set, Min1_Set; //set timer led 1
 int hour2_Set, Min2_Set; //set timer led 2
-bool led1_Status = OFF, led2_Status = OFF; // in order to set timer
+bool Motor_Status = OFF, led2_Status = OFF; // in order to set timer
 #define virtual_minute 100
 #define virtual_hour 30
 //devices 
-#define led1 12// device 1 
+#define Motor 12// device 1 
 #define led2 13// device 2
 #define MASS A2
 #define RAIN A1
@@ -66,6 +62,10 @@ int MASS_VALUE =0;
 int RAIN_VALUE =0;
 int Mass_Percent =0;
 #define alert 11 // warning it's rain
+#define Dry_Soil_Threshold 80
+#define Wet_Soil_Threshold 40
+#define No_Rain_Threshold 900
+#define Rain_Threshold 250
 void setup() {
  // Serial.begin(9600);
   lcd.begin(16, 2);  // initialize the lcd for 16 chars 2 lines, turn on backlight
@@ -74,8 +74,8 @@ void setup() {
   lcd.createChar(1, degree); // custom character
   timer.setInterval(500L, _update);// update data sensor after each 0,5s
   
-  pinMode(led1, OUTPUT);
-  digitalWrite(led1, 1); // 1 off-io pin -connect to relay
+  pinMode(Motor, OUTPUT);
+  digitalWrite(Motor, 1); // 1 off-io pin -connect to relay
   pinMode(led2, OUTPUT);
   digitalWrite(led2, 1);
   pinMode(alert,OUTPUT);
@@ -203,21 +203,25 @@ void display_lcd()
   lcd.setCursor(13, 1);
   lcd.print(h);
   lcd.print("%");
+  /*------SOIL_SENSOR-------*/
+  /* lcd.setCursor(13, 1);
+  lcd.print(Mass_Percent);
+  lcd.print("%");*/
 
 }
 void led_status1()
 {
 
-  int x = digitalRead(led1);
+  int x = digitalRead(Motor);
   if (x == 0)
   {
     lcd.setCursor(0, 0);
-    lcd.print("LED1 : ON");
+    lcd.print("Motor : ON");
   }
   else if (x == 1)
   {
     lcd.setCursor(0, 0);
-    lcd.print("LED1 : OFF");
+    lcd.print("Motor : OFF");
   }
 }
 void led_status2()
@@ -354,7 +358,7 @@ void timer1()
 {
   if ((hour1_Set == _hour) && (Min1_Set == _minute))
   {
-    digitalWrite(led1, !led1_Status);
+    digitalWrite(Motor, !Motor_Status);
     hour1_Set = virtual_hour; 
     Min1_Set = virtual_minute;
   }
@@ -369,7 +373,7 @@ void _update()
   t = (int)DHT11.getCelsius();
   RAIN_VALUE =analogRead(RAIN);
   MASS_VALUE =analogRead(MASS);
-  Mass_Percent= map(MASS_VALUE,0,4095,0,100);
+  Mass_Percent= map(MASS_VALUE,0,1023,0,100);// convert from analog value to % value
   /* update timer */
   readTime();
 }
@@ -391,11 +395,20 @@ void check_button()
       display_lcd();
       break;
 
-    case SANG_BKDN:
-      lcd.setCursor(0,0);
-      lcd.print("TRAN SANG - BKDN");
-      lcd.setCursor(2, 1);
-      lcd.print("0964.500.940");
+    case MENU2:
+        lcd.setCursor(0, 0);
+        lcd.print("Level:");
+        lcd.setCursor(7, 0);
+        lcd.print(Mass_Percent);
+        lcd.print("%");
+        if(Mass_Percent >=  Dry_Soil_Threshold)
+        {
+           lcd.setCursor(0, 1);
+        lcd.print("Dry Soil !");
+          }
+          else {lcd.setCursor(0, 1);
+        lcd.print("Wet Soil !");
+            }
       break;
 
     case Device_1:
@@ -413,19 +426,19 @@ void check_button()
         }
         switch (healer) {
           case UP:
-            digitalWrite(led1, 0);
+            digitalWrite(Motor, 0);
             lcd.setCursor(0, 0);
-            lcd.print("LED1 :  ON");
+            lcd.print("Motor :  ON");
             break;
           case DOWN:
-            digitalWrite(led1, 1);      
+            digitalWrite(Motor, 1);      
             lcd.setCursor(0, 0);
-            lcd.print("LED1 : OFF");
+            lcd.print("Motor : OFF");
             break;
           case LEFT:
             hour1_Set = gio;
             Min1_Set = phut;
-            led1_Status = digitalRead(led1); //check device status
+            Motor_Status = digitalRead(Motor); //check device status
             lcd.setCursor(0, 1);
             lcd.print("Completed");
             break;
@@ -510,15 +523,15 @@ void check_button()
             smart = false;
             break;
           case SELECT:
-            int x = digitalRead(led1);
+            int x = digitalRead(Motor);
             int y = digitalRead(led2);
             if (x == 1) {
               lcd.setCursor(0, 0);
-              lcd.print("LED1  :  OFF  ");
+              lcd.print("Motor  :  OFF  ");
             }
             else  {
               lcd.setCursor(0, 0);
-              lcd.print("LED1  :   ON  ");
+              lcd.print("Motor  :   ON  ");
             }
 
             if (y == 1) {
@@ -1067,10 +1080,16 @@ void argriculture()
     Serial.print("Mass Percent : ");
   Serial.print(Mass_Percent);
    Serial.println();*/
-   if((MASS_VALUE <450)&&(RAIN_VALUE>=900)) // Low huminity & It's not rain
-   digitalWrite(led1,0); // On motor
-  /* else if(MASS_VALUE > 800) digitalWrite(led1,1); // Off motor*/
-   if(RAIN_VALUE <250)  {digitalWrite(led1,1); // Off motor
-                         digitalWrite(alert,1); }// it's raining
+   /*------------------------------*/
+   // Dry Soil -- > 5V --> 100 %
+   // Wet Soil --> 0v -- > 0%
+   if((Mass_Percent >= Dry_Soil_Threshold )&&(RAIN_VALUE>=No_Rain_Threshold)) // Dry soil & It's not rain
+   digitalWrite(Motor,0); // On Motor
+  else if(Mass_Percent<Wet_Soil_Threshold){ digitalWrite(Motor,1); // Off Motor
+   }
+   /*----------------------*/
+     if(RAIN_VALUE <Rain_Threshold)
+     { digitalWrite(Motor,1); // Off Motor
+     digitalWrite(alert,1); }// it's raining
    else digitalWrite(alert,0); // turn off warning ,it's not rain                      
   }
