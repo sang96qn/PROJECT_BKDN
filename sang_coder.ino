@@ -51,12 +51,13 @@ int gio, phut, giay, thu, ngay, thang, nam; //set timer
 int hour1_Set, Min1_Set; //set timer led 1
 int End_hour1_Set , End_Min1_Set ;
 int hour2_Set, Min2_Set; //set timer led 2
-bool Motor_Status = OFF, led2_Status = OFF; // in order to set timer
+int End_hour2_Set , End_Min2_Set ;
+bool Motor_Status = OFF, LAMB_Status = OFF; // in order to set timer
 #define virtual_minute 100
 #define virtual_hour 30
 //devices 
 #define Motor 12// device 1 
-#define led2 13// device 2
+#define LAMB  13// device 2
 #define MASS A2
 #define RAIN A1
 int MASS_VALUE =0;
@@ -78,8 +79,8 @@ void setup() {
   
   pinMode(Motor, OUTPUT);
   digitalWrite(Motor, 1); // 1 off-io pin -connect to relay
-  pinMode(led2, OUTPUT);
-  digitalWrite(led2, 1);
+  pinMode(LAMB , OUTPUT);
+  digitalWrite(LAMB , 1);
   pinMode(alert,OUTPUT);
   digitalWrite(alert, 0); // gpio arduino
   pinMode(MASS,INPUT);
@@ -229,16 +230,16 @@ void led_status1()
 void led_status2()
 {
 
-  int y = digitalRead(led2);
+  int y = digitalRead(LAMB );
   if (y == 0)
   {
     lcd.setCursor(0, 0);
-    lcd.print("LED2 : ON");
+    lcd.print("LAMB  : ON");
   }
   else if (y == 1)
   {
     lcd.setCursor(0, 0);
-    lcd.print("LED2 : OFF");
+    lcd.print("LAMB  : OFF");
   }
 }
 void change_day()
@@ -349,11 +350,19 @@ void change_month()
 }
 void timer2()
 {
-  if ((hour2_Set == _hour) && (Min2_Set == _minute))
+if ((hour2_Set == _hour) && (Min2_Set == _minute))
   {
-    digitalWrite(led2, !led2_Status);
-    hour2_Set = virtual_hour; // avoid repeating events
+  //  auto_check = false;
+    digitalWrite(LAMB, !LAMB_Status);
+    hour2_Set = virtual_hour; 
     Min2_Set = virtual_minute;
+  }
+   if ((End_hour2_Set == _hour) && (End_Min2_Set == _minute))
+  {
+   // auto_check = true;
+    digitalWrite(LAMB, !LAMB_Status);
+    End_hour2_Set = virtual_hour; 
+    End_Min2_Set = virtual_minute;
   }
 }
 void timer1()
@@ -479,21 +488,20 @@ void check_button()
         }
         switch (healer) {
           case UP:
-            digitalWrite(led2, 0);
-            lcd.setCursor(0, 0);
-            lcd.print("LED2 :  ON");
-            break;
-          case DOWN:
-            digitalWrite(led2, 1);
-            lcd.setCursor(0, 0);
-            lcd.print("LED2 : OFF");
-            break;
-          case LEFT:
             hour2_Set = gio;
             Min2_Set = phut;
-            led2_Status = digitalRead(led2);
+            LAMB_Status = digitalRead(LAMB); //check device status
             lcd.setCursor(0, 1);
-            lcd.print("Completed");
+            lcd.print("Set Time Start");
+            break;
+          case DOWN:
+            End_hour2_Set = gio;
+            End_Min2_Set = phut;
+            LAMB_Status = digitalRead(LAMB); //check device status
+            lcd.setCursor(0, 1);
+            lcd.print("Set Time End  ");
+            break;
+          case LEFT:
             break;
           case RIGHT:
             lcd.clear();
@@ -533,7 +541,7 @@ void check_button()
             break;
           case SELECT:
             int x = digitalRead(Motor);
-            int y = digitalRead(led2);
+            int y = digitalRead(LAMB );
             if (x == 1) {
               lcd.setCursor(0, 0);
               lcd.print("Motor  :  OFF  ");
@@ -545,11 +553,11 @@ void check_button()
 
             if (y == 1) {
               lcd.setCursor(0, 1);
-              lcd.print("LED2  :  OFF");
+              lcd.print("LAMB   :  OFF");
             }
             else  {
               lcd.setCursor(0, 1);
-              lcd.print("LED2  :   ON");
+              lcd.print("LAMB   :   ON");
             }
             isMenuChild = true;
             break;
