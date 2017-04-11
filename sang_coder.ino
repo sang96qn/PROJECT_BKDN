@@ -49,6 +49,7 @@ int btn;
 static int change = 0;
 int gio, phut, giay, thu, ngay, thang, nam; //set timer
 int hour1_Set, Min1_Set; //set timer led 1
+int End_hour1_Set , End_Min1_Set ;
 int hour2_Set, Min2_Set; //set timer led 2
 bool Motor_Status = OFF, led2_Status = OFF; // in order to set timer
 #define virtual_minute 100
@@ -66,6 +67,7 @@ int Mass_Percent =0;
 #define Wet_Soil_Threshold 40
 #define No_Rain_Threshold 900
 #define Rain_Threshold 250
+static bool auto_check = true;
 void setup() {
  // Serial.begin(9600);
   lcd.begin(16, 2);  // initialize the lcd for 16 chars 2 lines, turn on backlight
@@ -358,9 +360,17 @@ void timer1()
 {
   if ((hour1_Set == _hour) && (Min1_Set == _minute))
   {
+    auto_check = false;
     digitalWrite(Motor, !Motor_Status);
     hour1_Set = virtual_hour; 
     Min1_Set = virtual_minute;
+  }
+   if ((End_hour1_Set == _hour) && (End_Min1_Set == _minute))
+  {
+    auto_check = true;
+    digitalWrite(Motor, !Motor_Status);
+    End_hour1_Set = virtual_hour; 
+    End_Min1_Set = virtual_minute;
   }
 }
 
@@ -426,21 +436,21 @@ void check_button()
         }
         switch (healer) {
           case UP:
-            digitalWrite(Motor, 0);
-            lcd.setCursor(0, 0);
-            lcd.print("Motor :  ON");
-            break;
-          case DOWN:
-            digitalWrite(Motor, 1);      
-            lcd.setCursor(0, 0);
-            lcd.print("Motor : OFF");
-            break;
-          case LEFT:
             hour1_Set = gio;
             Min1_Set = phut;
             Motor_Status = digitalRead(Motor); //check device status
             lcd.setCursor(0, 1);
-            lcd.print("Completed");
+            lcd.print("Set Time Start");
+            break;
+          case DOWN:
+            End_hour1_Set = gio;
+            End_Min1_Set = phut;
+            Motor_Status = digitalRead(Motor); //check device status
+            lcd.setCursor(0, 1);
+            lcd.print("Set Time End");
+            break;
+          case LEFT:
+     
             break;
           case RIGHT:
             lcd.clear();
@@ -1083,6 +1093,8 @@ void argriculture()
    /*------------------------------*/
    // Dry Soil -- > 5V --> 100 %
    // Wet Soil --> 0v -- > 0%
+ if(auto_check == true){
+   
    if((Mass_Percent >= Dry_Soil_Threshold )&&(RAIN_VALUE>=No_Rain_Threshold)) // Dry soil & It's not rain
    digitalWrite(Motor,0); // On Motor
   else if(Mass_Percent<Wet_Soil_Threshold){ digitalWrite(Motor,1); // Off Motor
@@ -1093,3 +1105,4 @@ void argriculture()
      digitalWrite(alert,1); }// it's raining
    else digitalWrite(alert,0); // turn off warning ,it's not rain                      
   }
+ }
