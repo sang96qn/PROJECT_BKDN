@@ -447,10 +447,9 @@ void check_button()
             End_Min1_Set = phut;
             Motor_Status = digitalRead(Motor); //check device status
             lcd.setCursor(0, 1);
-            lcd.print("Set Time End");
+            lcd.print("Set Time End  ");
             break;
           case LEFT:
-     
             break;
           case RIGHT:
             lcd.clear();
