@@ -48,9 +48,9 @@ int btn_check;// btn_check: check button
 int btn;
 static int change = 0;
 int gio, phut, giay, thu, ngay, thang, nam; //set timer
-int hour1_Set, Min1_Set; //set timer led 1
+int hour1_Set, Min1_Set; //set timer motor
 int End_hour1_Set , End_Min1_Set ;
-int hour2_Set, Min2_Set; //set timer led 2
+int hour2_Set, Min2_Set; //set timer lamb
 int End_hour2_Set , End_Min2_Set ;
 bool Motor_Status = OFF, LAMB_Status = OFF; // in order to set timer
 #define virtual_minute 100
