@@ -24,7 +24,7 @@ AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
 #define ON true
 #define OFF false
 
-enum {Main_Screen, MENU2, Device_1, Device_2, Device_Status, Change_Hour, Change_Minute, Change_Second, Change_Day, Change_Date, Change_Month, Change_Year, Fix_Time};
+enum {Main_Screen, AGRICULTURE, Device_1,Timer_Mode, Change_Hour, Change_Minute, Change_Second, Change_Day, Change_Date, Change_Month, Change_Year, Fix_Time,Auto_Mode};
 
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
@@ -50,14 +50,11 @@ static int change = 0;
 int gio, phut, giay, thu, ngay, thang, nam; //set timer
 int hour1_Set, Min1_Set; //set timer motor
 int End_hour1_Set , End_Min1_Set ;
-int hour2_Set, Min2_Set; //set timer lamb
-int End_hour2_Set , End_Min2_Set ;
-bool Motor_Status = OFF, LAMB_Status = OFF; // in order to set timer
+bool Motor_Status = OFF; // in order to set timer
 #define virtual_minute 100
 #define virtual_hour 30
 //devices 
 #define Motor 12// device 1 
-#define LAMB  13// device 2
 #define MASS A2
 #define RAIN A1
 int MASS_VALUE =0;
@@ -79,8 +76,6 @@ void setup() {
   
   pinMode(Motor, OUTPUT);
   digitalWrite(Motor, 1); // 1 off-io pin -connect to relay
-  pinMode(LAMB , OUTPUT);
-  digitalWrite(LAMB , 1);
   pinMode(alert,OUTPUT);
   digitalWrite(alert, 0); // gpio arduino
   pinMode(MASS,INPUT);
@@ -91,8 +86,7 @@ void loop()
   timer.run();
   check_button();
   timer1();
-  timer2();
-  argriculture(); 
+  argriculture_(); 
 }
 
 int btn_read()
@@ -115,13 +109,13 @@ int menu()
   {
     lcd.clear();
     menu_count++;
-    if (menu_count > 12) menu_count = 12;
+    if (menu_count > 12) menu_count = 0;
   }
   else if (buttons.onRelease(DOWN))
   {
     lcd.clear();
     menu_count--;
-    if (menu_count <= 0) menu_count = 0;
+    if (menu_count <= 0) menu_count = 12;
   }
   else if (buttons.onRelease(LEFT))
   {
@@ -219,7 +213,7 @@ void led_status1()
   if (x == 0)
   {
     lcd.setCursor(0, 0);
-    lcd.print("Motor : ON");
+    lcd.print("Motor : ON ");
   }
   else if (x == 1)
   {
@@ -227,21 +221,7 @@ void led_status1()
     lcd.print("Motor : OFF");
   }
 }
-void led_status2()
-{
 
-  int y = digitalRead(LAMB );
-  if (y == 0)
-  {
-    lcd.setCursor(0, 0);
-    lcd.print("LAMB  : ON");
-  }
-  else if (y == 1)
-  {
-    lcd.setCursor(0, 0);
-    lcd.print("LAMB  : OFF");
-  }
-}
 void change_day()
 {
   switch (change)
@@ -348,35 +328,16 @@ void change_month()
       break;
   }
 }
-void timer2()
-{
-if ((hour2_Set == _hour) && (Min2_Set == _minute))
-  {
-  //  auto_check = false;
-    digitalWrite(LAMB, !LAMB_Status);
-    hour2_Set = virtual_hour; 
-    Min2_Set = virtual_minute;
-  }
-   if ((End_hour2_Set == _hour) && (End_Min2_Set == _minute))
-  {
-   // auto_check = true;
-    digitalWrite(LAMB, !LAMB_Status);
-    End_hour2_Set = virtual_hour; 
-    End_Min2_Set = virtual_minute;
-  }
-}
 void timer1()
 {
   if ((hour1_Set == _hour) && (Min1_Set == _minute))
   {
-    auto_check = false;
     digitalWrite(Motor, !Motor_Status);
     hour1_Set = virtual_hour; 
     Min1_Set = virtual_minute;
   }
    if ((End_hour1_Set == _hour) && (End_Min1_Set == _minute))
   {
-    auto_check = true;
     digitalWrite(Motor, !Motor_Status);
     End_hour1_Set = virtual_hour; 
     End_Min1_Set = virtual_minute;
@@ -414,7 +375,7 @@ void check_button()
       display_lcd();
       break;
 
-    case MENU2:
+    case AGRICULTURE:
         lcd.setCursor(0, 0);
         lcd.print("Level:");
         lcd.setCursor(7, 0);
@@ -445,18 +406,18 @@ void check_button()
         }
         switch (healer) {
           case UP:
-            hour1_Set = gio;
-            Min1_Set = phut;
-            Motor_Status = digitalRead(Motor); //check device status
-            lcd.setCursor(0, 1);
-            lcd.print("Set Time Start");
+          if(auto_check == false){
+            digitalWrite(Motor,OFF); // on motor
+            led_status1();}
+            else  {lcd.setCursor(0, 1);
+        lcd.print("Please Off Auto");}
             break;
           case DOWN:
-            End_hour1_Set = gio;
-            End_Min1_Set = phut;
-            Motor_Status = digitalRead(Motor); //check device status
-            lcd.setCursor(0, 1);
-            lcd.print("Set Time End  ");
+        if(auto_check == false){
+            digitalWrite(Motor,ON); // On: off motor
+            led_status1();}
+            else  {lcd.setCursor(0, 1);
+        lcd.print("Please Off Auto");}
             break;
           case LEFT:
             break;
@@ -472,15 +433,16 @@ void check_button()
         }//switch child case 2
       }//else case 2
       break;
-    /*---------------------------------*/
-    case Device_2:
+    
+    /*-----------gap---------------*/
+    case :
       if (smart == false) {
         if (btn_check == SELECT) {
           smart = true;
           healer = btn_check;
         }
         lcd.setCursor(0, 0);
-        lcd.print("Device 2");
+        lcd.print("Timer Mode");
       }
       else {
         if (btn_check != NO_SELECT) {
@@ -488,18 +450,24 @@ void check_button()
         }
         switch (healer) {
           case UP:
-            hour2_Set = gio;
-            Min2_Set = phut;
-            LAMB_Status = digitalRead(LAMB); //check device status
+          if(auto_check == false){
+            hour1_Set = gio;
+            Min1_Set = phut;
+            Motor_Status = digitalRead(Motor); //check device status
             lcd.setCursor(0, 1);
-            lcd.print("Set Time Start");
+            lcd.print("Set Time Start");}
+            else {lcd.setCursor(0, 1);
+        lcd.print("Please Off Auto");}
             break;
           case DOWN:
-            End_hour2_Set = gio;
-            End_Min2_Set = phut;
-            LAMB_Status = digitalRead(LAMB); //check device status
+          if(auto_check ==false){
+            End_hour1_Set = gio;
+            End_Min1_Set = phut;
+            Motor_Status = digitalRead(Motor); //check device status
             lcd.setCursor(0, 1);
-            lcd.print("Set Time End  ");
+            lcd.print("Set Time End  ");}
+            else{lcd.setCursor(0, 1);
+        lcd.print("Please Off Auto");}
             break;
           case LEFT:
             break;
@@ -509,60 +477,13 @@ void check_button()
             smart = false;
             break;
           case SELECT:
-            led_status2();
+            led_status1();
             isMenuChild = true;
             break;
-        }//switch child case 3
-      }//else case 3
+        }//switch child case 2
+      }//else case 2
       break;
-    /*------------gap---------------*/
-    case Device_Status:
-      if (smart == false)
-      {
-        if (btn_check == SELECT)
-        {
-          smart = true;
-          healer = btn_check;
-        }
-        lcd.setCursor(0, 0);
-        lcd.print("Device Status");
-      }
-      else {
-        if (btn_check != NO_SELECT)
-        {
-          healer = btn_check;
-        }
-        switch (healer)
-        {
-          case RIGHT:
-            lcd.clear();
-            isMenuChild = false;
-            smart = false;
-            break;
-          case SELECT:
-            int x = digitalRead(Motor);
-            int y = digitalRead(LAMB );
-            if (x == 1) {
-              lcd.setCursor(0, 0);
-              lcd.print("Motor  :  OFF  ");
-            }
-            else  {
-              lcd.setCursor(0, 0);
-              lcd.print("Motor  :   ON  ");
-            }
-
-            if (y == 1) {
-              lcd.setCursor(0, 1);
-              lcd.print("LAMB   :  OFF");
-            }
-            else  {
-              lcd.setCursor(0, 1);
-              lcd.print("LAMB   :   ON");
-            }
-            isMenuChild = true;
-            break;
-        }
-      } break;
+    
     /*-----------gap---------------*/
     case Change_Hour:
       if (smart == false) {
@@ -1076,6 +997,79 @@ void check_button()
             break;
         }
       } break;
+      /*-------------------------------------*/
+      case Auto_Mode :
+      if (smart == false) {
+        if (btn_check == SELECT) {
+          smart = true;
+          healer = btn_check;
+        }
+        lcd.setCursor(0, 0);
+        lcd.print("Auto Mode");
+      }
+      else {
+        if (btn_check != NO_SELECT) {
+          healer = btn_check;
+          isPress = true;
+        }
+        switch (healer) {
+          case UP:
+           if (isPress) {
+              lcd.clear();
+              isPress = false;
+            }
+            auto_check =true;
+             lcd.setCursor(0, 0);
+            lcd.print("Mode :");
+            if(auto_check == true)
+            {
+            lcd.setCursor(7, 0);
+            lcd.print("ON");}
+            else {  lcd.setCursor(7, 0);
+            lcd.print("OFF");}
+            break;
+          case DOWN:
+           if (isPress) {
+              lcd.clear();
+              isPress = false;
+            }
+            auto_check =false;
+            lcd.setCursor(0, 0);
+            lcd.print("Mode :");
+            if(auto_check == true)
+            {
+            lcd.setCursor(7, 0);
+            lcd.print("ON");}
+            else {  lcd.setCursor(7, 0);
+            lcd.print("OFF");}           
+            break;
+          case LEFT:
+            break;
+          case RIGHT:
+            lcd.clear();
+            isMenuChild = false;
+            smart = false;
+            isFirst = true;
+            break;
+          case SELECT:
+            if (isFirst) {
+              lcd.clear();
+              isFirst = false;
+            }
+            
+            lcd.setCursor(0, 0);
+            lcd.print("Mode :");
+            if(auto_check == true)
+            {
+            lcd.setCursor(7, 0);
+            lcd.print("ON");}
+            else {  lcd.setCursor(7, 0);
+            lcd.print("OFF");}
+            isMenuChild = true;
+      break;
+        }//switch child case 13
+      }//else case 13
+      break;
       /*-----------------gap_end----------------*/
   }//switch _menu
 }//void
@@ -1086,7 +1080,7 @@ void dht11_wrapper() {
 {    lcd.setCursor(5, 1);
             lcd.print("AM");
   }*/
-void argriculture()
+void argriculture_()
 {
   /*Serial.print("Rain : ");
   Serial.print(RAIN_VALUE);
@@ -1113,3 +1107,4 @@ void argriculture()
    else digitalWrite(alert,0); // turn off warning ,it's not rain                      
   }
  }
+
